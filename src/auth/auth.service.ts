@@ -59,8 +59,9 @@ export class AuthService {
       throw new ForbiddenException('Wrong credentials!');
     }
 
-    // Return the user
     delete user.hash;
+
+    // Return the user
     return user;
   }
 }
