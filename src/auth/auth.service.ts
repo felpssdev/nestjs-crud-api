@@ -3,6 +3,8 @@ import { PrismaService } from 'src/prisma/prisma.service';
 import { AuthDto } from './dto';
 import * as argon from 'argon2';
 import { PrismaClientKnownRequestError } from '@prisma/client/runtime/library';
+import { JwtService } from '@nestjs/jwt';
+import { ConfigService } from '@nestjs/config';
 
 // Injectable Decorator allows dependency injection, which
 // is a programming technique that makes a class independent
@@ -10,7 +12,11 @@ import { PrismaClientKnownRequestError } from '@prisma/client/runtime/library';
 @Injectable()
 // Responsible for handling the business logic
 export class AuthService {
-  constructor(private prisma: PrismaService) { }
+  constructor(
+    private prisma: PrismaService,
+    private jwt: JwtService,
+    private config: ConfigService,
+  ) { }
   async signUp(dto: AuthDto) {
     // Generate the password hash
     const hash = await argon.hash(dto.password);
@@ -24,10 +30,8 @@ export class AuthService {
         },
       });
 
-      delete user.hash;
-
-      // Return the saved user
-      return { user };
+      // Return the saved user's JWT token
+      return this.signToken(user.id, user.email);
     } catch (err) {
       if (err instanceof PrismaClientKnownRequestError) {
         if (err.code === 'P2002') {
@@ -59,9 +63,28 @@ export class AuthService {
       throw new ForbiddenException('Wrong credentials!');
     }
 
-    delete user.hash;
+    // Return the JWT token
+    return this.signToken(user.id, user.email);
+  }
 
-    // Return the user
-    return user;
+  async signToken(
+    userId: number,
+    email: string,
+  ): Promise<{ access_token: string }> {
+    const payload = {
+      sub: userId,
+      email,
+    };
+
+    const secret = this.config.get('JWT_SECRET');
+
+    const token = await this.jwt.signAsync(payload, {
+      expiresIn: '15m',
+      secret,
+    });
+
+    return {
+      access_token: token,
+    };
   }
 }
